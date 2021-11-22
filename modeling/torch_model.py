@@ -317,6 +317,14 @@ class HydraNet(nn.Module):
                 attention_mask=input_mask,
                 token_type_ids=None,
                 return_dict=False)
+        elif self.config["base_class"] == "tapas":
+            bert_output, pooled_output = self.base_model(
+                input_ids=input_ids,
+                attention_mask=input_mask,
+                token_type_ids=utils.convert_tapas_segment_ids(
+                    segment_ids).to(torch.device("cuda")),
+                return_dict=False
+            )
         else:
             bert_output, pooled_output = self.base_model(
                 input_ids=input_ids,
