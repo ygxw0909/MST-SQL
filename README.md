@@ -21,7 +21,7 @@ python main.py --conf conf/wikisql.conf
 ```
 
 #### 2. ESQL
-Execute the following command for training ST-SQL on ESQL.
+Put the Chinese version of RoBERTa in the appropriate directory and modify the settings in util.py. Execute the following command for training ST-SQL on ESQL.
 ```bash
 python main.py --conf conf/esql.conf
 ```
