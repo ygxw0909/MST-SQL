@@ -4,6 +4,7 @@ import unicodedata
 import re
 import transformers
 import numpy as np
+import torch
 import copy
 import random
 
@@ -13,9 +14,10 @@ pretrained_weights = {
     ("roberta", "base"): "roberta-base",
     ("roberta", "large"): "roberta-large",
     ("albert", "xlarge"): "albert-xlarge-v2",
-    ("roberta_cn", "large"): "/home/gxn/ST-SQL-Final/pretrained/roberta_cn/",
+    ("roberta_cn", "large"): "/home/qgl/gxn/RoBERTa_CN/",
     ("albert", "xlarge"): "albert-xlarge-v2",
     ("grappa", "large"): "Salesforce/grappa_large_jnt",
+    ("tapas", "large"): "google/tapas-large",
     ("tapas", "base"): "google/tapas-base",
 }
 
@@ -213,4 +215,43 @@ def filter_content_one_column(tokenizer, q_tok_cn, cells, threshold, max_num):
         if i >= max_num:
             break
         res.append(elem[0])
+    return res
+
+def convert_tapas_token_type_ids(token_type_ids):
+    res = token_type_ids[0, :, 0]
+    res = (1 - res).tolist()
+    flag = False
+    for i in range(len(res) - 1):
+        if not flag and res[i + 1] == 0:
+            res[i] = 0
+            flag = True
+            continue
+        if flag and res[i] == 1:
+            res[i] = 2
+    res[0] = 0
+    return res
+
+def convert_tapas_segment_ids(segment_ids):  # (N, len)
+    orig = segment_ids + 0
+    for i in range(orig.shape[0]):
+        orig[i, 0] = 1
+        flag = 0
+        for j in range(orig.shape[1]):
+            if flag == 0 and orig[i, j] == 0:
+                orig[i, j] = 1
+                flag = 1
+                continue
+            if flag == 1 and orig[i, j] == 2:
+                orig[i, j] = 1
+    orig = 1 - orig
+    res = torch.zeros(orig.shape[0], orig.shape[1], 7)
+    res[:, :, 0] = orig
+    res[:, :, 1] = orig
+    res = res.to(dtype=int)
+    try:
+        assert convert_tapas_token_type_ids(
+            res[0].unsqueeze(0)) == segment_ids[0].tolist()
+    except:
+        print("conv: ", convert_tapas_token_type_ids(res[0].unsqueeze(0)))
+        print("orig: ", segment_ids[0])
     return res

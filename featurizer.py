@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import utils
+import pandas as pd
 import torch.utils.data as torch_data
 from collections import defaultdict
 import random
@@ -223,49 +224,70 @@ class HydraFeaturizer(object):
 
             column_input = col_type + " " + column + " " + " ".join(content) if use_content else col_type + " " + column
 
-            if self.config["base_class"] == "grappa":
-                tokenize_result = self.tokenizer.encode_plus(
-                    column_input,
-                    tokens,
-                    padding="max_length",
+            if config["base_class"] == "tapas":
+                data = {col_type + " " + column: content} if use_content else {col_type + " " + column: []}
+                tokenize_result = self.tokenizer(
+                    table=pd.DataFrame.from_dict(data),
+                    queries=" ".join(tokens),
                     max_length=max_total_length,
-                    truncation=True,
-                )
-            elif self.config["base_class"] == "roberta":
-                tokenize_result = self.tokenizer.encode_plus(
-                    column_input,
-                    tokens,
+                    truncation_strategy="longest_first",
                     padding="max_length",
-                    max_length=max_total_length,
+                    return_token_type_ids=True,
                     truncation=True,
-                    add_prefix_space=True
+                    return_tensors="pt"
                 )
+                input_ids = tokenize_result["input_ids"][0].tolist()
+                segment_ids = utils.convert_tapas_token_type_ids(tokenize_result["token_type_ids"])
+                input_mask = tokenize_result["attention_mask"][0].tolist()
+                subword_to_word = [0] + subword_to_word
+                for i in range(len(input_ids) - len(subword_to_word)):
+                    subword_to_word += [0]
+                word_to_subword = [(pos[0]+1, pos[1]+1) for pos in word_to_subword]
             else:
-                tokenize_result = self.tokenizer.encode_plus(
-                    column_input,
-                    tokens,
-                    padding="max_length",
-                    max_length=max_total_length,
-                    truncation=True,
-                )
+                if self.config["base_class"] == "grappa":
+                    tokenize_result = self.tokenizer.encode_plus(
+                        column_input,
+                        tokens,
+                        padding="max_length",
+                        max_length=max_total_length,
+                        truncation=True,
+                    )
+                elif self.config["base_class"] == "roberta":
+                    tokenize_result = self.tokenizer.encode_plus(
+                        column_input,
+                        tokens,
+                        padding="max_length",
+                        max_length=max_total_length,
+                        truncation=True,
+                        add_prefix_space=True
+                    )
+                else:
+                    tokenize_result = self.tokenizer.encode_plus(
+                        column_input,
+                        tokens,
+                        padding="max_length",
+                        max_length=max_total_length,
+                        truncation=True,
+                    )
 
-            input_ids = tokenize_result["input_ids"]
-            input_mask = tokenize_result["attention_mask"]
+                input_ids = tokenize_result["input_ids"]
+                input_mask = tokenize_result["attention_mask"]
+
+                column_token_length = 0
+                for i, token_id in enumerate(input_ids):
+                    if token_id == self.tokenizer.sep_token_id:
+                        column_token_length = i + 2
+                        break
+                segment_ids = [0] * max_total_length
+                for i in range(column_token_length, max_total_length):
+                    if input_mask[i] == 0:
+                        break
+                    segment_ids[i] = 1
+
+                subword_to_word = [0] * column_token_length + subword_to_word
+                word_to_subword = [(pos[0]+column_token_length, pos[1]+column_token_length) for pos in word_to_subword]
 
             tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
-            column_token_length = 0
-            for i, token_id in enumerate(input_ids):
-                if token_id == self.tokenizer.sep_token_id:
-                    column_token_length = i + 2
-                    break
-            segment_ids = [0] * max_total_length
-            for i in range(column_token_length, max_total_length):
-                if input_mask[i] == 0:
-                    break
-                segment_ids[i] = 1
-
-            subword_to_word = [0] * column_token_length + subword_to_word
-            word_to_subword = [(pos[0]+column_token_length, pos[1]+column_token_length) for pos in word_to_subword]
 
             assert len(input_ids) == max_total_length
             assert len(input_mask) == max_total_length
@@ -392,6 +414,7 @@ class HydraFeaturizer(object):
                         else:
                             col_rel = max(0.2, min(column_count_dict[col.lower()] / col_num_mean, 2.0))
                             model_inputs["col_relevance"].append(col_rel)
+                            # model_inputs["col_relevance"].append(1)
                 cnt += 1
                 if cnt % 5000 == 0:
                     print(cnt)
