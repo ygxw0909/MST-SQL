@@ -1,5 +1,5 @@
-# ST-SQL
-Data and Code for paper *ST-SQL: Semi-Supervised Self-Training for Text-to-SQL via Column Specificity Meta-Learning* is available for research purposes.
+# MST-SQL
+Data and Code for paper *Improving Few-Shot Text-to-SQL with Meta Self-Training via Column Specificity* is available for research purposes.
 
 # Requirement
 * python 3.7.11
